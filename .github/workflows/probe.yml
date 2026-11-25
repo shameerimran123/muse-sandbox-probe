@@ -1,0 +1,42 @@
+name: sandbox-probe
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout probe repo
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Run probe (specs, N1-N8 read-only, N11)
+        run: bash probe/run_probe.sh
+      - name: Tamper attempt (N11)
+        run: |
+          echo '{"forged": true}' >> probe-results/results.json
+      - name: Verify tamper detected (N11)
+        run: |
+          if [ ! -f probe-results/results.json ]; then echo "N11 ERROR: results.json missing"; exit 1; fi
+          if [ ! -f probe-results/results.sha256 ]; then echo "N11 ERROR: results.sha256 missing"; exit 1; fi
+          if sha256sum -c probe-results/results.sha256 2>/dev/null; then
+            echo "N11 FAIL: checksum matches, tamper NOT detected"
+            exit 1
+          else
+            echo "N11 PASS: checksum MISMATCH detected (basic checksum-mismatch detection, not tamper-proofing)"
+          fi
+      - name: Upload results
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: probe-results
+          path: probe-results/
+          retention-days: 1
+          if-no-files-found: error
+  timeout:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Timeout enforcement test (N9)
+        run: sleep 300
